@@ -1,51 +1,94 @@
 import os
-import pickle
+import argparse
 
-from skimage.io import imread
-from skimage.transform import resize
-import numpy as np
-from sklearn.model_selection import train_test_split
-from sklearn.model_selection import GridSearchCV
-from sklearn.svm import SVC
-from sklearn.metrics import accuracy_score
+import cv2
+import mediapipe as mp
 
 
-# prepare data
-input_dir = '/home/phillip/Desktop/todays_tutorial/19_parking_car_counter/code/clf-data'
-categories = ['empty', 'not_empty']
+def process_img(img, face_detection):
 
-data = []
-labels = []
-for category_idx, category in enumerate(categories):
-    for file in os.listdir(os.path.join(input_dir, category)):
-        img_path = os.path.join(input_dir, category, file)
-        img = imread(img_path)
-        img = resize(img, (15, 15))
-        data.append(img.flatten())
-        labels.append(category_idx)
+    H, W, _ = img.shape
 
-data = np.asarray(data)
-labels = np.asarray(labels)
+    img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    out = face_detection.process(img_rgb)
 
-# train / test split
-x_train, x_test, y_train, y_test = train_test_split(data, labels, test_size=0.2, shuffle=True, stratify=labels)
+    if out.detections is not None:
+        for detection in out.detections:
+            location_data = detection.location_data
+            bbox = location_data.relative_bounding_box
 
-# train classifier
-classifier = SVC()
+            x1, y1, w, h = bbox.xmin, bbox.ymin, bbox.width, bbox.height
 
-parameters = [{'gamma': [0.01, 0.001, 0.0001], 'C': [1, 10, 100, 1000]}]
+            x1 = int(x1 * W)
+            y1 = int(y1 * H)
+            w = int(w * W)
+            h = int(h * H)
 
-grid_search = GridSearchCV(classifier, parameters)
+            # print(x1, y1, w, h)
 
-grid_search.fit(x_train, y_train)
+            # blur faces
+            img[y1:y1 + h, x1:x1 + w, :] = cv2.blur(img[y1:y1 + h, x1:x1 + w, :], (30, 30))
 
-# test performance
-best_estimator = grid_search.best_estimator_
+    return img
 
-y_prediction = best_estimator.predict(x_test)
 
-score = accuracy_score(y_prediction, y_test)
+args = argparse.ArgumentParser()
 
-print('{}% of samples were correctly classified'.format(str(score * 100)))
+args.add_argument("--mode", default='webcam')
+args.add_argument("--filePath", default=None)
 
-pickle.dump(best_estimator, open('./model.p', 'wb'))
+args = args.parse_args()
+
+
+output_dir = './output'
+if not os.path.exists(output_dir):
+    os.makedirs(output_dir)
+
+# detect faces
+mp_face_detection = mp.solutions.face_detection
+
+with mp_face_detection.FaceDetection(model_selection=0, min_detection_confidence=0.5) as face_detection:
+
+    if args.mode in ["image"]:
+        # read image
+        img = cv2.imread(args.filePath)
+
+        img = process_img(img, face_detection)
+
+        # save image
+        cv2.imwrite(os.path.join(output_dir, 'output.png'), img)
+
+    elif args.mode in ['video']:
+
+        cap = cv2.VideoCapture(args.filePath)
+        ret, frame = cap.read()
+
+        output_video = cv2.VideoWriter(os.path.join(output_dir, 'output.mp4'),
+                                       cv2.VideoWriter_fourcc(*'MP4V'),
+                                       25,
+                                       (frame.shape[1], frame.shape[0]))
+
+        while ret:
+
+            frame = process_img(frame, face_detection)
+
+            output_video.write(frame)
+
+            ret, frame = cap.read()
+
+        cap.release()
+        output_video.release()
+
+    elif args.mode in ['webcam']:
+        cap = cv2.VideoCapture(2)
+
+        ret, frame = cap.read()
+        while ret:
+            frame = process_img(frame, face_detection)
+
+            cv2.imshow('frame', frame)
+            cv2.waitKey(25)
+
+            ret, frame = cap.read()
+
+        cap.release()
