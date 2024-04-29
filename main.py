@@ -1,34 +1,16 @@
-import cv2
-from PIL import Image
+# This is a sample Python script.
 
-from util import get_limits
+# Press Shift+F10 to execute it or replace it with your code.
+# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
 
 
-yellow = [0, 255, 255]  # yellow in BGR colorspace
-cap = cv2.VideoCapture(2)
-while True:
-    ret, frame = cap.read()
+def print_hi(name):
+    # Use a breakpoint in the code line below to debug your script.
+    print(f'Hi, {name}')  # Press Ctrl+F8 to toggle the breakpoint.
 
-    hsvImage = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
 
-    lowerLimit, upperLimit = get_limits(color=yellow)
+# Press the green button in the gutter to run the script.
+if __name__ == '__main__':
+    print_hi('PyCharm')
 
-    mask = cv2.inRange(hsvImage, lowerLimit, upperLimit)
-
-    mask_ = Image.fromarray(mask)
-
-    bbox = mask_.getbbox()
-
-    if bbox is not None:
-        x1, y1, x2, y2 = bbox
-
-        frame = cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 5)
-
-    cv2.imshow('frame', frame)
-
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
-
-cap.release()
-
-cv2.destroyAllWindows()
+# See PyCharm help at https://www.jetbrains.com/help/pycharm/
